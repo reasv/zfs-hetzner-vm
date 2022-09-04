@@ -382,7 +382,7 @@ function ask_hostname {
 
   local hostname_invalid_message=
 
-  while [[ ! $v_hostname =~ ^[a-z][a-zA-Z_:.-]+$ ]]; do
+  while [[ ! $v_hostname =~ ^[a-z][a-zA-Z0-9_:.-]+$ ]]; do
     v_hostname=$(dialog --inputbox "${hostname_invalid_message}Set the host name" 30 100 "$c_default_hostname" 3>&1 1>&2 2>&3)
 
     hostname_invalid_message="Invalid host name! "
@@ -515,7 +515,7 @@ echo "======= partitioning the disk =========="
   for selected_disk in "${v_selected_disks[@]}"; do
     wipefs --all --force "$selected_disk"
     sgdisk -a1 -n1:24K:+1000K            -t1:EF02 "$selected_disk"
-    sgdisk -n2:0:+512M                   -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n2:0:+2G                   -t2:BF01 "$selected_disk" # Boot pool
     sgdisk -n3:0:"$tail_space_parameter" -t3:BF01 "$selected_disk" # Root pool
   done
 
@@ -632,6 +632,7 @@ Address=${ip6addr_prefix}:1/64
 Gateway=fe80::1
 CONF
 chroot_execute "systemctl enable systemd-networkd.service"
+chroot_execute "systemctl enable systemd-resolved.service"
 
 
 cp /etc/resolv.conf $c_zfs_mount_dir/etc/resolv.conf
@@ -719,6 +720,12 @@ if [[ $v_zfs_experimental == "1" ]]; then
 else
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms zfsutils-linux"
 fi
+chroot_execute 'cat << DKMS > /etc/dkms/zfs.conf
+# override for /usr/src/zfs-*/dkms.conf:
+# always rebuild initrd when zfs module has been changed
+# (either by a ZFS update or a new kernel version)
+REMAKE_INITRD="yes"
+DKMS'
 
 echo "======= installing OpenSSH and network tooling =========="
 chroot_execute "apt install --yes openssh-server net-tools"
